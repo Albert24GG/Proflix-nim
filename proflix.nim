@@ -1,7 +1,6 @@
 import std/[httpclient, tables, strutils, nre, os, algorithm]
-#import nigui
-#import exp as fileExplorer
-
+import nigui
+import "src/fileExplorer"
 
 type
   TorrentFinder = object
@@ -64,6 +63,19 @@ proc clearScreen() =
   discard execShellCmd("clear")
 
 
+proc isNumb(s: string): bool = 
+  if len(s) == 0:
+    return false
+  for c in s:
+    if not isDigit(c):
+      return false
+  return true
+
+
+proc isValidChoice(choice: string): bool =
+  return choice == "y" or choice.isEmptyOrWhitespace()
+
+
 proc printOptions(finder: TorrentFinder, numb: int) =
   var optionNumb = 1
   let optionString = "($#) [$#] [$#] [S:$#] [L:$#] $#"
@@ -73,15 +85,6 @@ proc printOptions(finder: TorrentFinder, numb: int) =
     stdout.write(optionString % [$optionNumb, option[6], option[5], 
       option[3], option[4], option[2]], '\n')
     inc(optionNumb)
-
-
-proc isNumb(s: string): bool = 
-  if len(s) == 0:
-    return false
-  for c in s:
-    if not isDigit(c):
-      return false
-  return true
 
 
 proc chooseOption(finder: TorrentFinder, numb: int, client: HttpClient): string =
@@ -94,7 +97,7 @@ proc chooseOption(finder: TorrentFinder, numb: int, client: HttpClient): string 
   # read input until a valid number of options is returned
   while choice > optionSize or choice < 1:
     stdout.write(optionString)
-    choiceStr = readline(stdin)
+    choiceStr = stdin.readLine().strip()
     if isNumb(choiceStr):
       choice = parseInt(choiceStr)
   let 
@@ -139,12 +142,29 @@ proc fetchInfo(finder: var TorrentFinder, name: string, client: HttpClient): boo
       finder.results &= [site, finder.urlPrefix & site & links[cnt], names[cnt], seeders[cnt].strip(),
         leechers[cnt].strip(), dates[cnt], sizes[cnt]] 
   if len(finder.results) == 0:
-    stdout.write("No magnet links found!")
+    stdout.write("No magnet links found!\n")
     return false
   # sort the sequence in descending order by number of seeds
   finder.results.sort(compare)
   return true
 
+
+proc selectSubFile(subPath: var string): bool = 
+  # open a file explorer and select subtitles
+  fileExplorer.window.show()
+  fileExplorer.app.run()
+  subPath = fileExplorer.selected
+  return true
+#[
+  var dialog = newOpenFileDialog()
+  dialog.title = "Select subtitles file"
+  dialog.run()
+  if len(dialog.files) > 0:
+    subPath = dialog.files[0]
+    return true
+  else: 
+    return false
+  ]#
 
 proc main() =
   var 
@@ -156,17 +176,17 @@ proc main() =
     optionNum: int
   clearScreen()
   stdout.write("🧲 Media to search: ")
-  let name: string = readLine(stdin)
+  let name: string = stdin.readLine()
   # read input until a number is returned
   while not isNumb(optionNumString):
     stdout.write("Max number of results: ")
-    optionNumString = readLine(stdin).strip()
+    optionNumString = stdin.readLine().strip()
   optionNum = parseInt(optionNumString)
   var choice: string
   if not finder.fetchInfo(name, client):
     stdout.write("Want to continue? (Y/n): ")
-    choice = readLine(stdin).toLowerAscii()
-    if choice == "y" or choice.isEmptyOrWhitespace():
+    choice = stdin.readLine().toLowerAscii()
+    if isValidChoice(choice):
       finder.clearResults()
       clearScreen()
       main()
@@ -177,6 +197,16 @@ proc main() =
   let magnetLink: string = finder.chooseOption(optionNum, client)
   var shellCommand: string = "webtorrent \"$#\" -o $# --mpv" % [magnetLink, finder.cacheDir]
   #select subtitles
+  stdout.write("Do you want to load any subtitles file?(Y/n): ")
+  choice = stdin.readLine().toLowerAscii()
+  var subPath: string
+  if isValidChoice(choice):
+    while not selectSubFile(subPath):
+      stdout.write("Did not specify any file. Do you want to try again?(Y/n): ")
+      let choice: string = stdin.readLine().toLowerAscii()
+      if not isValidChoice(choice): break
+  if not subPath.isEmptyOrWhitespace():
+    shellCommand = shellCommand & " -t $#" % subPath 
   # execute the command and play the media
   discard execShellCmd(shellCommand)
   finder.cleanup()
@@ -184,7 +214,3 @@ proc main() =
 
 
 main()
-
-#fileExplorer.window.show()
-#fileExplorer.window.hide()
-#app.run()
