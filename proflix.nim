@@ -60,7 +60,11 @@ proc cleanup(finder: TorrentFinder) =
 
 
 proc clearScreen() = 
-  discard execShellCmd("clear")
+  when defined windows:
+    discard execShellCmd("cls")
+  else:
+    discard execShellCmd("clear")
+    
 
 
 proc isNumb(s: string): bool = 
