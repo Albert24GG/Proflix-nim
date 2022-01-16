@@ -1,6 +1,6 @@
 import std/[httpclient, tables, strutils, nre, os, algorithm]
-import nigui
-import "src/fileExplorer"
+import tinyfiledialogs
+
 
 type
   TorrentFinder = object
@@ -15,10 +15,12 @@ proc initialize(): TorrentFinder =
 
   var siteRes: seq[array[7, string]] = @[] 
   let
-    cache = ".torrentCache"
-    prefix = "https://"
-    agent = "Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1667.0 Safari/537.36"
-    site1 = {
+    cache: string = ".torrentCache"
+    prefix: string = "https://"
+    agent: string = 
+      "Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1667.0 Safari/537.36"
+    site1: Table[string, string] = 
+              {
                   "query": "/usearch/$#/?sortby=seeders&sort=desc",
                   "name": "<a.*class=\"cellMainLink\">(?:\r\n|\r|\n)(.+)</a>",
                   "link": "<a href=\"(.+)\" class=\"cellMainLink\">",
@@ -28,7 +30,8 @@ proc initialize(): TorrentFinder =
                   "size": "<td class=\"nobr center\">(?:\\r\\n|\\r|\\n| )(.+?) </td>",
                   "magnet": "<a class=\"kaGiantButton \".*href=\"(magnet:.+?)\"><i class=\"ka ka-magnet\"></i></a>"
               }.toTable
-    site2 = {
+    site2: Table[string, string] = 
+              {
                   "query": "/sort-search/$#/seeders/desc/1/",
                   "name": "<a href=\"/torrent/\\d+/(.+)/\">.*</a>",
                   "link": "<a href=\"(/torrent/.+)\">.*</a>",
@@ -38,7 +41,8 @@ proc initialize(): TorrentFinder =
                   "size": "<td class=\"coll-4 size.*\">(.+)<span.*</td>",
                   "magnet": "(magnet:.+?)\".on"
               }.toTable
-    sitesInfoData = {"kickasstorrents.to": site1, "1337x.to": site2}.toTable
+    sitesInfoData: Table[string, Table[string, string]] = 
+      {"kickasstorrents.to": site1, "1337x.to": site2}.toTable
   if not dirExists(cache):
     createDir(cache)
   return TorrentFinder(cacheDir: cache, results: siteRes, urlPrefix: prefix, header: agent, sitesInfo: sitesInfoData)
@@ -81,8 +85,8 @@ proc isValidChoice(choice: string): bool =
 
 
 proc printOptions(finder: TorrentFinder, numb: int) =
-  var optionNumb = 1
-  let optionString = "($#) [$#] [$#] [S:$#] [L:$#] $#"
+  var optionNumb: Natural = 1
+  let optionString: string = "($#) [$#] [$#] [S:$#] [L:$#] $#"
   for option in finder.results:
     if optionNumb > numb:
       break
@@ -93,8 +97,10 @@ proc printOptions(finder: TorrentFinder, numb: int) =
 
 proc chooseOption(finder: TorrentFinder, numb: int, client: HttpClient): string =
   let 
-    optionSize = min(len(finder.results), numb)
-    optionString = "Choose a torrent to watch [1-$#]: " % [$optionSize]
+    optionSize: Natural = 
+      min(len(finder.results), numb)
+    optionString: string = 
+      "Choose a torrent to watch [1-$#]: " % [$optionSize]
   var 
     choice: int = -1
     choiceStr: string
@@ -117,23 +123,31 @@ proc compare(x, y: array[7, string]): int =
 
 
 proc fetchInfo(finder: var TorrentFinder, name: string, client: HttpClient): bool =
-  var name = name.replace(" ", "%20")
+  var name: string = 
+    name.replace(" ", "%20")
   for site, regex in finder.sitesInfo:
-    var url = $finder.urlPrefix & $site & $(regex["query"] % [name])
+    var url: string = 
+      $finder.urlPrefix & $site & $(regex["query"] % [name])
     var page: string
     try:
       page = client.getContent(url)
     except:
       continue
-    var names = getElementList(finder, site, "name", page)
+    var names: seq[string] = 
+      getElementList(finder, site, "name", page)
     if len(names) == 0:
       continue
     var
-      links = getElementList(finder, site, "link", page)
-      seeders = getElementList(finder, site, "seeders", page)
-      leechers = getElementList(finder, site, "leechers", page)
-      dates = getElementList(finder, site, "time", page)
-      sizes = getElementList(finder, site, "size", page)
+      links: seq[string] = 
+        getElementList(finder, site, "link", page)
+      seeders: seq[string] = 
+        getElementList(finder, site, "seeders", page)
+      leechers: seq[string] = 
+        getElementList(finder, site, "leechers", page)
+      dates: seq[string] = 
+        getElementList(finder, site, "time", page)
+      sizes: seq[string] = 
+        getElementList(finder, site, "size", page)
     for cnt in countup(0, len(names)-1):
       # remove unwanted text from strings
       if site == "kickasstorrents.to":
@@ -153,22 +167,19 @@ proc fetchInfo(finder: var TorrentFinder, name: string, client: HttpClient): boo
   return true
 
 
-proc selectSubFile(subPath: var string): bool = 
+proc selectSubFile(): string = 
   # open a file explorer and select subtitles
-  fileExplorer.window.show()
-  fileExplorer.app.run()
-  subPath = fileExplorer.selected
-  return true
-#[
-  var dialog = newOpenFileDialog()
-  dialog.title = "Select subtitles file"
-  dialog.run()
-  if len(dialog.files) > 0:
-    subPath = dialog.files[0]
-    return true
-  else: 
-    return false
-  ]#
+  var selection: string = $tinyfd_openFileDialog("Select subtitles file", "./")
+  if not selection.isEmptyOrWhitespace():
+    return selection
+  else:
+    stdout.write("Did not specify any file. Do you want to try again?(Y/n): ")
+    let choice: string = stdin.readLine().toLowerAscii()
+    if choice.isValidChoice():
+      return selectSubFile()
+    else:
+      return ""
+
 
 proc main() =
   var 
@@ -205,16 +216,14 @@ proc main() =
   choice = stdin.readLine().toLowerAscii()
   var subPath: string
   if isValidChoice(choice):
-    while not selectSubFile(subPath):
-      stdout.write("Did not specify any file. Do you want to try again?(Y/n): ")
-      let choice: string = stdin.readLine().toLowerAscii()
-      if not isValidChoice(choice): break
-  if not subPath.isEmptyOrWhitespace():
-    shellCommand = shellCommand & " -t $#" % subPath 
+    subPath = selectSubFile()
+    if not subPath.isEmptyOrWhitespace():
+      shellCommand = shellCommand & " -t $#" % subPath 
+  # send notification
+  discard tinyfd_notifyPopup("Proflix Notification", "🎥 Enjoy Watching ☺️", "ok", "info", 1)
   # execute the command and play the media
   discard execShellCmd(shellCommand)
   finder.cleanup()
-  return
 
 
 main()
