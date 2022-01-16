@@ -1,5 +1,5 @@
 import std/[httpclient, tables, strutils, nre, os, algorithm]
-import tinyfiledialogs
+import os_files/dialog
 
 
 type
@@ -169,7 +169,10 @@ proc fetchInfo(finder: var TorrentFinder, name: string, client: HttpClient): boo
 
 proc selectSubFile(): string = 
   # open a file explorer and select subtitles
-  var selection: string = $tinyfd_openFileDialog("Select subtitles file", "./")
+  var fileChooser: DialogInfo
+  fileChooser.kind = dkOpenFile
+  fileChooser.title = "Select subtitles file"
+  var selection: string = fileChooser.show()
   if not selection.isEmptyOrWhitespace():
     return selection
   else:
@@ -219,8 +222,6 @@ proc main() =
     subPath = selectSubFile()
     if not subPath.isEmptyOrWhitespace():
       shellCommand = shellCommand & " -t $#" % subPath 
-  # send notification
-  discard tinyfd_notifyPopup("Proflix Notification", "🎥 Enjoy Watching ☺️", "ok", "info", 1)
   # execute the command and play the media
   discard execShellCmd(shellCommand)
   finder.cleanup()
