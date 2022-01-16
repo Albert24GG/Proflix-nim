@@ -20,12 +20,12 @@ Proflix-nim is a cross-platform tool written in nim that scrapes a list of torre
 
 ## Installation
 
-Clone the repository and install the `tinyfiledialogs` nim module :
+Clone the repository and install the `os_files` nim module :
 
 ```sh
 $ git clone https://github.com/Albert24GG/Proflix.git
 $ cd ./Proflix-nim
-$ nimble install tinyfiledialogs
+$ nimble install os_files
 ```
 
 ## Usage
