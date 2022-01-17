@@ -196,7 +196,7 @@ proc main() =
   stdout.write("🧲 Media to search: ")
   let name: string = stdin.readLine()
   # read input until a number is returned
-  while not isNumb(optionNumString):
+  while not isNumb(optionNumString) or parseInt(optionNumString) < 1:
     stdout.write("Max number of results: ")
     optionNumString = stdin.readLine().strip()
   optionNum = parseInt(optionNumString)
