@@ -105,7 +105,7 @@ proc chooseOption(finder: TorrentFinder, numb: int, client: HttpClient): string 
     choice: int = -1
     choiceStr: string
   # read input until a valid number of options is returned
-  while choice > optionSize or choice < 1:
+  while not (choice in 1 .. optionSize):
     stdout.write(optionString)
     choiceStr = stdin.readLine().strip()
     if isNumb(choiceStr):
@@ -184,6 +184,38 @@ proc selectSubFile(): string =
       return ""
 
 
+proc selectDir(): string = 
+  # open a file explorer and select download directory
+  var fileChooser: DialogInfo
+  fileChooser.kind = dkSelectFolder
+  fileChooser.title = "Select download directory"
+  var selection: string = fileChooser.show()
+  if not selection.isEmptyOrWhitespace():
+    return selection
+  else:
+    stdout.write("Did not specify any download directory. Do you want to try again?(Y/n): ")
+    let choice: string = stdin.readLine().toLowerAscii()
+    if choice.isValidChoice():
+      return selectDir()
+    else:
+      return ""
+
+
+proc chooseApp(): int =
+    # Choose whether to download or stream the media
+    stdout.write("What do you want to do?\n  1) Download media\n  2) Stream media\n")
+    let optionString: string = "Choose an option [1-2]: "
+    var 
+      choice: int  = -1
+      choiceString: string
+    while not (choice in 1 .. 2):
+      stdout.write(optionString)
+      choiceString = stdin.readLine().strip()
+      if isNumb(choiceString):
+        choice = parseInt(choiceString)
+    return choice
+
+
 proc main() =
   var 
     # construct our object
@@ -192,7 +224,18 @@ proc main() =
     client: HttpClient = newHttpClient(userAgent=finder.header)
     optionNumString: string = ""
     optionNum: int
+    shellCommand: string
+    downloadDir: string
   clearScreen()
+  let appOption: int = chooseApp()
+  if appOption == 1:
+    stdout.write("Select download directory:\n")
+    shellCommand = "webtorrent download \"$#\""
+    downloadDir = selectDir()
+    if not downloadDir.isEmptyOrWhitespace():
+      shellCommand &= " -o $# "
+  else:
+    shellCommand = "webtorrent \"$#\" -o $# --mpv"
   stdout.write("🧲 Media to search: ")
   let name: string = stdin.readLine()
   # read input until a number is returned
@@ -213,16 +256,19 @@ proc main() =
   finder.printOptions(optionNum)
   # get the magnet link of the selected media
   let magnetLink: string = finder.chooseOption(optionNum, client)
-  var shellCommand: string = "webtorrent \"$#\" -o $# --mpv" % [magnetLink, finder.cacheDir]
-  #select subtitles
-  stdout.write("Do you want to load any subtitles file?(Y/n): ")
-  choice = stdin.readLine().toLowerAscii()
-  var subPath: string
-  if isValidChoice(choice):
-    subPath = selectSubFile()
-    if not subPath.isEmptyOrWhitespace():
-      shellCommand = shellCommand & " -t $#" % subPath 
-  # execute the command and play the media
+  if appOption == 1:
+    shellCommand = shellCommand % [magnetLink, downloadDir]
+  else:
+    shellCommand = shellCommand % [magnetLink, finder.cacheDir]
+    #select subtitles
+    stdout.write("Do you want to load any subtitles file?(Y/n): ")
+    choice = stdin.readLine().toLowerAscii()
+    var subPath: string
+    if isValidChoice(choice):
+      subPath = selectSubFile()
+      if not subPath.isEmptyOrWhitespace():
+        shellCommand = shellCommand & " -t $#" % subPath 
+    # execute the command and play the media
   discard execShellCmd(shellCommand)
   finder.cleanup()
 
