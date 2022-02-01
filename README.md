@@ -9,7 +9,7 @@
 
 ## What is this?
 
-Proflix-nim is a cross-platform tool written in nim that scrapes a list of torrent sites for magnet links and uses webtorrent to stream the media directly to mpv.
+Proflix-nim is a cross-platform tool written in nim that scrapes a list of torrent sites for magnet links and uses webtorrent to stream the media directly to mpv or to just download it.
 
 ## Dependencies
 
