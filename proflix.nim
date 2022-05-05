@@ -1,4 +1,4 @@
-import std/[httpclient, tables, strutils, nre, os, algorithm, json]
+import std/[httpclient, strutils, nre, os, algorithm, json]
 import os_files/dialog
 
 
@@ -9,7 +9,6 @@ type
     urlPrefix: string
     header: string
     sitesInfo: JsonNode
-    #sitesInfo: Table[string, Table[string, string]]
 
 
 proc getInfo(): JsonNode = 
@@ -60,7 +59,6 @@ proc clearScreen() =
   else:
     discard execShellCmd("clear")
     
-
 
 proc isNumb(s: string): bool = 
   if len(s) == 0:
