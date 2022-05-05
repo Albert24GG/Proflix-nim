@@ -1,56 +1,47 @@
-import std/[httpclient, tables, strutils, nre, os, algorithm]
+import std/[httpclient, tables, strutils, nre, os, algorithm, json]
 import os_files/dialog
 
 
 type
-  TorrentFinder = object
+  TorrentFinder = ref object of RootObj
     cacheDir: string
     results: seq[array[7, string]]
     urlPrefix: string
     header: string
-    sitesInfo: Table[string, Table[string, string]]
+    sitesInfo: JsonNode
+    #sitesInfo: Table[string, Table[string, string]]
+
+
+proc getInfo(): JsonNode = 
+  try:
+    return parseFile("sitesInfo.json")
+  except:
+    raise newException(OSError, "Json parsing error or sitesInfo.json file missing!")
 
 
 proc initialize(): TorrentFinder =
+  # create a new TorrentFinder Object
+  new result
+  
+  # get the regex from .json file
+  var info: JsonNode = getInfo()
+  
+  let siteRes: seq[array[7, string]] = @[] 
+  result.cacheDir = ".torrentCache"
+  result.results = siteRes
+  result.urlPrefix = "https://"
+  result.header = 
+    "Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1667.0 Safari/537.36"
+  result.sitesInfo = info
 
-  var siteRes: seq[array[7, string]] = @[] 
-  let
-    cache: string = ".torrentCache"
-    prefix: string = "https://"
-    agent: string = 
-      "Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1667.0 Safari/537.36"
-    site1: Table[string, string] = 
-              {
-                  "query": "/usearch/$#/?sortby=seeders&sort=desc",
-                  "name": "<a.*class=\"cellMainLink\">(?:\r\n|\r|\n)(.+)</a>",
-                  "link": "<a href=\"(.+)\" class=\"cellMainLink\">",
-                  "seeders": "<td class=\"green center\">(?:\\r\\n|\\r|\\n| )(.+)</td>",
-                  "leechers": "<td class=\"red lasttd center\">(?:\\r\\n|\\r|\\n| )(.+)</td>",
-                  "time": "<td class=\"center\" title=\"(.+<br/>.+)\">",
-                  "size": "<td class=\"nobr center\">(?:\\r\\n|\\r|\\n| )(.+?) </td>",
-                  "magnet": "<a class=\"kaGiantButton \".*href=\"(magnet:.+?)\"><i class=\"ka ka-magnet\"></i></a>"
-              }.toTable
-    site2: Table[string, string] = 
-              {
-                  "query": "/sort-search/$#/seeders/desc/1/",
-                  "name": "<a href=\"/torrent/\\d+/(.+)/\">.*</a>",
-                  "link": "<a href=\"(/torrent/.+)\">.*</a>",
-                  "seeders": "<td class=\"coll-2 seeds\">(\\d+)</td>",
-                  "leechers": "<td class=\"coll-3 leeches\">(\\d+)</td>",
-                  "time": "<td class=\"coll-date\">(.+)</td>",
-                  "size": "<td class=\"coll-4 size.*\">(.+)<span.*</td>",
-                  "magnet": "(magnet:.+?)\".on"
-              }.toTable
-    sitesInfoData: Table[string, Table[string, string]] = 
-      {"kickasstorrents.to": site1, "1337x.to": site2}.toTable
-  if not dirExists(cache):
-    createDir(cache)
-  return TorrentFinder(cacheDir: cache, results: siteRes, urlPrefix: prefix, header: agent, sitesInfo: sitesInfoData)
+  # create cache directory if it doesn't already exist
+  if not dirExists(result.cacheDir):
+    createDir(result.cacheDir)
 
 
 proc getElementList(finder: TorrentFinder, site: string, name: string, page: string): seq[string] =
   var res =  newSeq[string]()
-  for match in findIter(page, re(finder.sitesInfo[site][name])):
+  for match in findIter(page, re(finder.sitesInfo[site][name][0].getStr())):
     res &= match.captures[0]
   return res
 
@@ -86,11 +77,11 @@ proc isValidChoice(choice: string): bool =
 
 proc printOptions(finder: TorrentFinder, numb: int) =
   var optionNumb: Natural = 1
-  let optionString: string = "($#) [$#] [$#] [S:$#] [L:$#] $#"
+  let optionString: string = "($#) [$#] [$#] [$#] [S:$#] [L:$#] $#"
   for option in finder.results:
     if optionNumb > numb:
       break
-    stdout.write(optionString % [$optionNumb, option[6], option[5], 
+    stdout.write(optionString % [$optionNumb, option[0], option[6], option[5], 
       option[3], option[4], option[2]], '\n')
     inc(optionNumb)
 
@@ -112,7 +103,7 @@ proc chooseOption(finder: TorrentFinder, numb: int, client: HttpClient): string 
       choice = parseInt(choiceStr)
   let 
     magnetPage: string = client.getContent(finder.results[choice-1][1])
-    magnetLink = magnetPage.find( re(finder.sitesInfo[finder.results[choice-1][0]]["magnet"]) ).get.captures[0]
+    magnetLink = magnetPage.find( re(finder.sitesInfo[finder.results[choice-1][0]]["magnet"][0].getStr()) ).get.captures[0]
   return magnetLink
 
 
@@ -126,39 +117,40 @@ proc fetchInfo(finder: var TorrentFinder, name: string, client: HttpClient): boo
   var name: string = 
     name.replace(" ", "%20")
   for site, regex in finder.sitesInfo:
-    var url: string = 
-      $finder.urlPrefix & $site & $(regex["query"] % [name])
-    var page: string
-    try:
-      page = client.getContent(url)
-    except:
-      continue
-    var names: seq[string] = 
-      getElementList(finder, site, "name", page)
-    if len(names) == 0:
-      continue
-    var
-      links: seq[string] = 
-        getElementList(finder, site, "link", page)
-      seeders: seq[string] = 
-        getElementList(finder, site, "seeders", page)
-      leechers: seq[string] = 
-        getElementList(finder, site, "leechers", page)
-      dates: seq[string] = 
-        getElementList(finder, site, "time", page)
-      sizes: seq[string] = 
-        getElementList(finder, site, "size", page)
-    for cnt in countup(0, len(names)-1):
-      # remove unwanted text from strings
-      if site == "kickasstorrents.to":
-        dates[cnt] = dates[cnt].replace("<br/>", " ") & " ago"
-        names[cnt] = multiReplace(names[cnt], [("<strong class=\"red\">", "")])
-        names[cnt] = multiReplace(names[cnt], [("</strong>", "")])
-      else:
-        names[cnt] = multiReplace(names[cnt], [("-", " ")])
-      # add info to results sequence
-      finder.results &= [site, finder.urlPrefix & site & links[cnt], names[cnt], seeders[cnt].strip(),
-        leechers[cnt].strip(), dates[cnt], sizes[cnt]] 
+    for query in regex["query"] :
+      var url: string = 
+        $finder.urlPrefix & $site & $(query.getStr() % [name])
+      var page: string
+      try:
+        page = client.getContent(url)
+      except:
+        continue
+      var names: seq[string] = 
+        getElementList(finder, site, "name", page)
+      if len(names) == 0:
+        continue
+      var
+        links: seq[string] = 
+          getElementList(finder, site, "link", page)
+        seeders: seq[string] = 
+          getElementList(finder, site, "seeders", page)
+        leechers: seq[string] = 
+          getElementList(finder, site, "leechers", page)
+        dates: seq[string] = 
+          getElementList(finder, site, "time", page)
+        sizes: seq[string] = 
+          getElementList(finder, site, "size", page)
+      for cnt in countup(0, len(names)-1):
+        # remove unwanted text from strings
+        if site == "kickasstorrents.to":
+          dates[cnt] = dates[cnt].replace("<br/>", " ") & " ago"
+          names[cnt] = multiReplace(names[cnt], [("<strong class=\"red\">", "")])
+          names[cnt] = multiReplace(names[cnt], [("</strong>", "")])
+        else:
+          names[cnt] = multiReplace(names[cnt], [("-", " ")])
+        # add info to results sequence
+        finder.results &= [site, finder.urlPrefix & site & links[cnt], names[cnt], seeders[cnt].strip(),
+          leechers[cnt].strip(), dates[cnt], sizes[cnt]] 
   if len(finder.results) == 0:
     stdout.write("No magnet links found!\n")
     return false
@@ -273,4 +265,5 @@ proc main() =
   finder.cleanup()
 
 
-main()
+if isMainModule:
+  main()
