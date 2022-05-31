@@ -148,7 +148,8 @@ proc fetchInfo(finder: var TorrentFinder, name: string, client: HttpClient): boo
           names[cnt] = multiReplace(names[cnt], [("-", " ")])
         # add info to results sequence
         finder.results &= [site, finder.urlPrefix & site & links[cnt], names[cnt], seeders[cnt].strip(),
-          leechers[cnt].strip(), dates[cnt], sizes[cnt]] 
+          leechers[cnt].strip(), dates[cnt], sizes[cnt]]
+      break
   if len(finder.results) == 0:
     stdout.write("No magnet links found!\n")
     return false
