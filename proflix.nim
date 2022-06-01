@@ -158,36 +158,28 @@ proc fetchInfo(finder: var TorrentFinder, name: string, client: HttpClient): boo
   return true
 
 
-proc selectSubFile(): string = 
-  # open a file explorer and select subtitles
-  var fileChooser: DialogInfo
-  fileChooser.kind = dkOpenFile
-  fileChooser.title = "Select subtitles file"
+proc selectSubFileOrDir(option: bool): string = 
+  # open a file explorer and select subtitles or download directory
+  var 
+    fileChooser: DialogInfo
+    message: string = "Did not specify any $#. Do you want to try again?(Y/n): "
+  if option == false:
+    fileChooser.kind = dkOpenFile
+    fileChooser.title = "Select subtitles file"
+    message = message % "file"
+  else:
+    fileChooser.kind = dkSelectFolder
+    fileChooser.title = "Select download directory"
+    message = message % "download directory"
+
   var selection: string = fileChooser.show()
   if not selection.isEmptyOrWhitespace():
     return selection
   else:
-    stdout.write("Did not specify any file. Do you want to try again?(Y/n): ")
+    stdout.write(message)
     let choice: string = stdin.readLine().toLowerAscii()
     if choice.isValidChoice():
-      return selectSubFile()
-    else:
-      return ""
-
-
-proc selectDir(): string = 
-  # open a file explorer and select download directory
-  var fileChooser: DialogInfo
-  fileChooser.kind = dkSelectFolder
-  fileChooser.title = "Select download directory"
-  var selection: string = fileChooser.show()
-  if not selection.isEmptyOrWhitespace():
-    return selection
-  else:
-    stdout.write("Did not specify any download directory. Do you want to try again?(Y/n): ")
-    let choice: string = stdin.readLine().toLowerAscii()
-    if choice.isValidChoice():
-      return selectDir()
+      return selectSubFileOrDir(option)
     else:
       return ""
 
@@ -222,7 +214,7 @@ proc main() =
   if appOption == 1:
     stdout.write("Select download directory:\n")
     shellCommand = "webtorrent download \"$#\""
-    downloadDir = selectDir()
+    downloadDir = selectSubFileOrDir(true)
     if not downloadDir.isEmptyOrWhitespace():
       shellCommand &= " -o $# "
   else:
@@ -256,7 +248,7 @@ proc main() =
     choice = stdin.readLine().toLowerAscii()
     var subPath: string
     if isValidChoice(choice):
-      subPath = selectSubFile()
+      subPath = selectSubFileOrDir(false)
       if not subPath.isEmptyOrWhitespace():
         shellCommand = shellCommand & " -t $#" % subPath 
     # execute the command and play the media
