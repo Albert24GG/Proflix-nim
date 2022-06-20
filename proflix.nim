@@ -254,6 +254,7 @@ proc main() =
     # execute the command and play the media
   discard execShellCmd(shellCommand)
   finder.cleanup()
+  system.quit()
 
 
 if isMainModule:
