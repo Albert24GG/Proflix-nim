@@ -211,6 +211,7 @@ proc main() =
     downloadDir: string
   clearScreen()
   let appOption: int = chooseApp()
+  clearScreen()
   if appOption == 1:
     stdout.write("Select download directory:\n")
     shellCommand = "webtorrent download \"$#\""
@@ -219,12 +220,14 @@ proc main() =
       shellCommand &= " -o $# "
   else:
     shellCommand = "webtorrent \"$#\" -o $# --mpv"
+  clearScreen()
   stdout.write("🧲 Media to search: ")
   let name: string = stdin.readLine()
   # read input until a number is returned
   while not isNumb(optionNumString) or parseInt(optionNumString) < 1:
     stdout.write("Max number of results: ")
     optionNumString = stdin.readLine().strip()
+  clearScreen()
   optionNum = parseInt(optionNumString)
   var choice: string
   if not finder.fetchInfo(name, client):
@@ -250,7 +253,7 @@ proc main() =
     if isValidChoice(choice):
       subPath = selectSubFileOrDir(false)
       if not subPath.isEmptyOrWhitespace():
-        shellCommand = shellCommand & " -t $#" % subPath 
+        shellCommand = shellCommand & " -t \"$#\"" % subPath 
     # execute the command and play the media
   discard execShellCmd(shellCommand)
   finder.cleanup()
