@@ -219,7 +219,7 @@ proc main() =
     if not downloadDir.isEmptyOrWhitespace():
       shellCommand &= " -o $# "
   else:
-    shellCommand = "webtorrent \"$#\" -o $# --mpv"
+    shellCommand = "webtorrent \"$#\" -o $# --mpv --not-on-top"
   clearScreen()
   stdout.write("🧲 Media to search: ")
   let name: string = stdin.readLine()
